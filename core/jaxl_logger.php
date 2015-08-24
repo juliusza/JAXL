@@ -56,37 +56,72 @@ function _debug($msg) { JAXLLogger::log($msg, JAXL_DEBUG); }
 // prefix done by _debug, _error, ... methods
 function _colorize($msg, $verbosity) { error_log(JAXLLogger::colorize($msg, $verbosity)); }
 
-class JAXLLogger {
-	
-	public static $level = JAXL_DEBUG;
-	public static $path = null;
-	public static $max_log_size = 1000;
-	
-	protected static $colors = array(
-		1 => 31,	// error: red
-		2 => 34,	// warning: blue
-		3 => 33,	// notice: yellow
-		4 => 32,	// info: green
-		5 => 37		// debug: white
-	);
-	
-	public static function log($msg, $verbosity=1) {
-		if($verbosity <= self::$level) {
-			$bt = debug_backtrace(); array_shift($bt); $callee = array_shift($bt);
-			$msg = basename($callee['file'], '.php').":".$callee['line']." - ".@date('Y-m-d H:i:s')." - ".$msg;
-			
-			$size = strlen($msg);
-			if($size > self::$max_log_size) $msg = substr($msg, 0, self::$max_log_size) . ' ...';
-			
-			if(isset(self::$path)) error_log($msg . PHP_EOL, 3, self::$path);
-			else error_log(self::colorize($msg, $verbosity));
-		}
-	}
-	
-	public static function colorize($msg, $verbosity) {
-		return "\033[".self::$colors[$verbosity]."m".$msg."\033[0m";
-	}
-	
-}
+class JAXLLogger
+{
+    
+    public static $level = JAXL_DEBUG;
+    public static $path = null;
+    public static $max_log_size = 1000;
+    
+    protected static $colors = array(
+        1 => 31,    // error: red
+        2 => 33,    // warning: yellow
+        3 => 36,    // notice: cyan
+        4 => 32,    // info: green
+        5 => 37     // debug: white
+    );
 
-?>
+    public static function log($msg, $verbosity = 1, array $streams = [])
+    {
+        if ($verbosity > self::$level && empty($streams)) {
+            return;
+        }
+
+        if ($msg instanceof Exception) {
+            $callee['file'] = $msg->getFile();
+            $callee['line'] = $msg->getLine();
+            $msg_text = $msg->getMessage();
+
+            if ($msg instanceof \Xmppa\PostgresStorageException) {
+                $msg_text.= "\nQuery:\n".$msg->querySql."\n\nParams:".print_r($msg->queryParams, true)."\n";
+            }
+
+            $stack_trace = $msg->getTraceAsString();
+
+            $msg = $msg_text;
+        } else {
+            $bt = debug_backtrace();
+            array_shift($bt);
+            $callee = array_shift($bt);
+        }
+
+        $procNum = \Xmppa\Application::getProcNum();
+
+        $msg = @date('Y-m-d H:i:s')." [$procNum] - ".basename($callee['file'], '.php').":".$callee['line']." - ".$msg;
+
+        $size = strlen($msg);
+
+        if ($verbosity <= JAXL_WARNING) {
+            $streams = array_merge($streams, ['php://stderr', 'php://stdout']);
+        } else {
+            $streams = array_merge($streams, ['php://stdout']);
+        }
+
+        foreach ($streams as $stream) {
+            $h = fopen($stream, 'a');
+            if ($size > self::$max_log_size && strpos($stream, 'php://') === 0) {
+                $msg = substr($msg, 0, self::$max_log_size) . ' ...';
+            }
+            fwrite($h, self::colorize($msg, $verbosity).PHP_EOL);
+            if ($stream !== 'php://stdout' && isset($stack_trace)) {
+                fwrite($h, self::colorize($stack_trace, $verbosity).PHP_EOL);
+            }
+            fclose($h);
+        }
+    }
+    
+    public static function colorize($msg, $verbosity)
+    {
+        return "\033[".self::$colors[$verbosity]."m".$msg."\033[0m";
+    }
+}
