@@ -646,7 +646,7 @@ class JAXL extends XMPPStream {
 			_error("preferred auth type not supported, trying $mech");
 		}
 		
-		$this->send_auth_pkt($mech, @$this->jid ? $this->jid->to_string() : null, @$this->pass);
+		$this->send_auth_pkt($mech, @$this->jid ? $this->jid->node : null, @$this->pass);
 		
 		if($pref_auth == 'X-FACEBOOK-PLATFORM') {
 			return "wait_for_fb_sasl_response";
