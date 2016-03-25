@@ -575,7 +575,8 @@ abstract class XMPPStream extends JAXLFsm {
 					return "wait_for_session_response";
 				}
 				else {
-					// FIXME: 
+					_warning("Got invalid stanza, was expecting iq message with type=result");
+					_notice($stanza->to_string());
 				}
 				break;
 			default:
